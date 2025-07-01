@@ -23,7 +23,8 @@ $requiredModules = @(
     'Microsoft.Graph.Authentication',              # Always required for Connect-MgGraph
     'Microsoft.Graph.Applications',                # For app registration operations
     'Microsoft.Graph.Users',                       # For user creation and management
-    'Microsoft.Graph.Identity.DirectoryManagement' # For role assignments
+    'Microsoft.Graph.Identity.DirectoryManagement', # For role assignments
+    'Microsoft.Graph.Identity.SignIns'               # For OAuth2PermissionGrant cmdlets
 )
 
 $modulesToInstall = @()
