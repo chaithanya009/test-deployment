@@ -18,63 +18,32 @@ $audienceMap = @{
     MultiTenantAndPersonal  = 'AzureADandPersonalMicrosoftAccount'
 }
 
-# ── load Microsoft.Graph ──────────────────────────────────────────────────────
-if (-not (Get-Module -ListAvailable Microsoft.Graph)) {
-    Write-Host "Microsoft.Graph module not found. Installing..." -ForegroundColor Yellow
-    Write-Host ""
-    
-    # Show a nice loader while downloading
-    $job = Start-Job -ScriptBlock {
-        Install-Module Microsoft.Graph -Scope CurrentUser -Force
+# ── install only required Microsoft.Graph sub-modules ────────────────────────
+$requiredModules = @(
+    'Microsoft.Graph.Authentication',              # Always required for Connect-MgGraph
+    'Microsoft.Graph.Applications',                # For app registration operations
+    'Microsoft.Graph.Users',                       # For user creation and management
+    'Microsoft.Graph.Identity.DirectoryManagement' # For role assignments
+)
+
+$modulesToInstall = @()
+foreach ($module in $requiredModules) {
+    if (-not (Get-Module -ListAvailable $module)) {
+        $modulesToInstall += $module
     }
-    
-    $spinner = @('|', '/', '-', '\')
-    $i = 0
-    
-    Write-Host "Downloading Microsoft.Graph module " -NoNewline -ForegroundColor Cyan
-    
-    while ($job.State -eq "Running") {
-        Write-Host $spinner[$i % 4] -NoNewline -ForegroundColor Green
-        Start-Sleep -Milliseconds 250
-        Write-Host "`b" -NoNewline
-        $i++
+}
+
+if ($modulesToInstall.Count -gt 0) {
+    Write-Host "Installing required Microsoft.Graph modules..." -ForegroundColor Yellow
+    foreach ($module in $modulesToInstall) {
+        Write-Host "  Installing $module..." -ForegroundColor Cyan
+        Install-Module $module -Scope CurrentUser -Force -ErrorAction Stop
     }
-    
-    # Wait for job completion and get results
-    $result = Receive-Job -Job $job -Wait
-    Remove-Job -Job $job
-    
-    Write-Host "✔" -ForegroundColor Green
-    Write-Host "Microsoft.Graph module installed successfully!" -ForegroundColor Green
+    Write-Host "✔ Required modules installed successfully!" -ForegroundColor Green
     Write-Host ""
 }
 
-# Show loader for importing (this is the slow part)
-Write-Host "Loading Microsoft.Graph module " -NoNewline -ForegroundColor Cyan
-
-$importJob = Start-Job -ScriptBlock {
-    Import-Module Microsoft.Graph
-}
-
-$spinner = @('|', '/', '-', '\')
-$i = 0
-
-while ($importJob.State -eq "Running") {
-    Write-Host $spinner[$i % 4] -NoNewline -ForegroundColor Green
-    Start-Sleep -Milliseconds 300
-    Write-Host "`b" -NoNewline
-    $i++
-}
-
-# Wait for import completion
-$importResult = Receive-Job -Job $importJob -Wait
-Remove-Job -Job $importJob
-
-Write-Host "✔" -ForegroundColor Green
-Write-Host "Microsoft.Graph module loaded successfully!" -ForegroundColor Green
-Write-Host ""
-
-# ── sign in with the five admin scopes ───────────────────────────────────────
+# ── sign in with the five admin scopes (no explicit import needed) ──────────
 $scopes = @(
     'Application.ReadWrite.All',
     'AppRoleAssignment.ReadWrite.All',
@@ -84,6 +53,8 @@ $scopes = @(
 )
 $connect  = @{ Scopes = $scopes }
 if ($TenantId) { $connect.TenantId = $TenantId }
+
+# Connect-MgGraph will auto-load Microsoft.Graph.Authentication module
 Connect-MgGraph @connect
 
 # ── Graph resource service-principal (only once) ──────────────────────────────
@@ -101,7 +72,7 @@ $permIds = @{
     User_Read                         = 'e1fe6dd8-ba31-4d61-89e7-88639da4683d'
 }
 
-# ── 1️⃣  Build the resourceAccess array FIRST  (Semperis pattern) ─────────────
+# ── 1️⃣  Build the resourceAccess array FIRST ─────────────
 $resourceAccess = @()
 
 # seven application roles
@@ -158,7 +129,7 @@ if ($CreateClientSecret) {
                  }
 }
 
-# ── admin consent (Semperis logic) ────────────────────────────────────────────
+# ── admin consent ────────────────────────────────────────────
 Write-Host "`nGranting admin consent …"
 
 # fetch current role assignments for this principal → Graph
